@@ -1,0 +1,15 @@
+# SQLite is file-based; the "database" is persisted on the named volume mounted at /data.
+# The API container runs FastAPI and reads/writes sqlite:////data/loads.db
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/loads.db
+      API_KEY: sk-testkey
+    volumes:
+      - sqlite_data:/data
+
+volumes:
+  sqlite_data:
