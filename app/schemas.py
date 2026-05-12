@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -23,3 +25,11 @@ class LoadCreate(LoadBase):
 
 class LoadRead(LoadBase):
     model_config = ConfigDict(from_attributes=True)
+
+
+class CarrierVerifyResponse(BaseModel):
+    """Unified shape: either valid + details, or valid + reason."""
+
+    valid: bool
+    details: dict[str, Any] | None = None
+    reason: str | None = None

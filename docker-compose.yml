@@ -1,13 +1,22 @@
 # SQLite is file-based; the "database" is persisted on the named volume mounted at /data.
-# The API container runs FastAPI and reads/writes sqlite:////data/loads.db
+# Redis caches FMCSA carrier verification for 1 hour (see app/carrier_verify.py).
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   api:
     build: .
     ports:
       - "8000:8000"
+    depends_on:
+      - redis
     environment:
       DATABASE_URL: sqlite:////data/loads.db
       API_KEY: sk-testkey
+      REDIS_URL: redis://redis:6379/0
+      FMCSA_WEB_KEY: ${FMCSA_WEB_KEY:-}
     volumes:
       - sqlite_data:/data
 
