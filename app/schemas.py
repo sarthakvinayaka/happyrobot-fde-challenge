@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,3 +34,24 @@ class CarrierVerifyResponse(BaseModel):
     valid: bool
     details: dict[str, Any] | None = None
     reason: str | None = None
+
+
+class ProcessCallRequest(BaseModel):
+    transcript: str
+    mc_number: str
+    interested_load_id: str | None = None
+    counter_offers: list[float] = Field(default_factory=list)
+    final_agreed_price: float | None = None
+
+
+class CallRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    timestamp: datetime
+    mc: str
+    load_id: str | None
+    offers_json: str
+    outcome: str
+    sentiment: str
+    transcript_snippet: str

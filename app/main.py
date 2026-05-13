@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 
+from typing import Any
+
 import redis.asyncio as redis
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.call_processing import process_happyrobot_call
 from app.carrier_verify import (
     FMCSAConfigurationError,
     FMCSAUpstreamError,
@@ -15,8 +18,8 @@ from app.carrier_verify import (
 from app.config import settings
 from app.database import Base, engine, get_db
 from app.deps import require_api_key
-from app.models import Load
-from app.schemas import CarrierVerifyResponse, LoadCreate, LoadRead
+from app.models import Call, Load
+from app.schemas import CallRead, CarrierVerifyResponse, LoadCreate, LoadRead, ProcessCallRequest
 
 
 @asynccontextmanager
@@ -106,6 +109,42 @@ def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
         ) from None
     db.refresh(row)
     return row
+
+
+@app.post("/process-call", dependencies=[Depends(require_api_key)])
+async def process_call_webhook(
+    payload: ProcessCallRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    debug: bool = Query(
+        False,
+        description="Include internal decision path (mc_valid, last_offer, bounds, …).",
+    ),
+) -> dict[str, Any]:
+    redis_client = getattr(request.app.state, "redis", None)
+    body, _call, dbg = await process_happyrobot_call(
+        transcript=payload.transcript,
+        mc_number=payload.mc_number,
+        interested_load_id=payload.interested_load_id,
+        counter_offers=payload.counter_offers,
+        final_agreed_price=payload.final_agreed_price,
+        db=db,
+        redis=redis_client,
+    )
+    if debug:
+        return {"debug": dbg, **body}
+    return body
+
+
+@app.get("/calls", response_model=list[CallRead], dependencies=[Depends(require_api_key)])
+def list_calls(
+    db: Session = Depends(get_db),
+    outcome: str | None = Query(default=None, description="Filter by outcome (exact match)"),
+) -> list[Call]:
+    stmt = select(Call).order_by(Call.timestamp.desc())
+    if outcome:
+        stmt = stmt.where(Call.outcome == outcome.strip())
+    return list(db.scalars(stmt).all())
 
 
 @app.get(

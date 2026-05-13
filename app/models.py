@@ -1,4 +1,6 @@
-from sqlalchemy import Float, Integer, String, Text
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -20,3 +22,16 @@ class Load(Base):
     num_of_pieces: Mapped[int] = mapped_column(Integer, nullable=False)
     miles: Mapped[int] = mapped_column(Integer, nullable=False)
     dimensions: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class Call(Base):
+    __tablename__ = "calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    mc: Mapped[str] = mapped_column(String(64), nullable=False)
+    load_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    offers_json: Mapped[str] = mapped_column(Text, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(64), nullable=False)
+    sentiment: Mapped[str] = mapped_column(String(32), nullable=False)
+    transcript_snippet: Mapped[str] = mapped_column(Text, nullable=False)
