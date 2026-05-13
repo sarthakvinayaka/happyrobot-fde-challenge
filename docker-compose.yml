@@ -1,24 +1,53 @@
-# SQLite is file-based; the "database" is persisted on the named volume mounted at /data.
-# Redis caches FMCSA carrier verification for 1 hour (see app/carrier_verify.py).
+# Stack: nginx (TLS) → api (FastAPI + SQLite on volume) + streamlit; redis for FMCSA cache.
+# "db" = SQLite file on volume `db_data` mounted into `api` at /data (no separate DB container).
+# Browse: https://localhost/ (API) and https://localhost/dashboard/ (Streamlit). Trust the self-signed cert.
+# Send header X-API-Key on every API request (nginx forwards it to api).
+
 services:
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    expose:
+      - "6379"
 
   api:
     build: .
-    ports:
-      - "8000:8000"
+    restart: unless-stopped
+    expose:
+      - "8000"
     depends_on:
       - redis
     environment:
       DATABASE_URL: sqlite:////data/loads.db
-      API_KEY: sk-testkey
+      API_KEY: ${API_KEY:-sk-testkey}
       REDIS_URL: redis://redis:6379/0
       FMCSA_WEB_KEY: ${FMCSA_WEB_KEY:-}
+      DASHBOARD_ENTRY_URL: ${DASHBOARD_ENTRY_URL:-https://localhost/dashboard/}
     volumes:
-      - sqlite_data:/data
+      - db_data:/data
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    restart: unless-stopped
+    expose:
+      - "8501"
+    depends_on:
+      - api
+    environment:
+      API_BASE_URL: http://api:8000
+      API_KEY: ${API_KEY:-sk-testkey}
+
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on:
+      - api
+      - streamlit
 
 volumes:
-  sqlite_data:
+  db_data:

@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     api_key: str = "sk-testkey"  # override with API_KEY in production
     redis_url: str = "redis://localhost:6379/0"
     fmcsa_web_key: str = ""  # set FMCSA_WEB_KEY in .env (QCMobile Web Key from mobile.fmcsa.dot.gov)
+    # Browser URL for the Streamlit UI (dev: http://127.0.0.1:8501 ; docker+nginx: https://localhost/dashboard/)
+    dashboard_entry_url: str = "http://127.0.0.1:8501"
 
     @field_validator("api_key", "fmcsa_web_key", mode="before")
     @classmethod

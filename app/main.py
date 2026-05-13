@@ -1,13 +1,15 @@
 from contextlib import asynccontextmanager
-
 from typing import Any
 
 import redis.asyncio as redis
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from app.call_processing import process_happyrobot_call
 from app.carrier_verify import (
@@ -17,7 +19,7 @@ from app.carrier_verify import (
 )
 from app.config import settings
 from app.database import Base, engine, get_db
-from app.deps import require_api_key
+from app.metrics_service import build_metrics_bundle
 from app.models import Call, Load
 from app.schemas import CallRead, CarrierVerifyResponse, LoadCreate, LoadRead, ProcessCallRequest
 
@@ -44,8 +46,30 @@ async def lifespan(app: FastAPI):
         await app.state.redis.aclose()
 
 
+class RequireApiKeyMiddleware(BaseHTTPMiddleware):
+    """Require X-API-Key on every request (except CORS preflight)."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        expected = settings.api_key.strip()
+        if not expected:
+            return JSONResponse(
+                {"detail": "API_KEY is not configured on the server."},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        got = (request.headers.get("X-API-Key") or "").strip()
+        if got != expected:
+            return JSONResponse(
+                {"detail": "Invalid or missing API key. Send header X-API-Key."},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        return await call_next(request)
+
+
 app = FastAPI(title="Freight Loads API", version="1.0.0", lifespan=lifespan)
 
+app.add_middleware(RequireApiKeyMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,6 +87,8 @@ def root() -> dict[str, str]:
         "docs": "/docs",
         "openapi": "/openapi.json",
         "health": "/health",
+        "metrics": "/metrics",
+        "dashboard": "/dashboard",
     }
 
 
@@ -81,7 +107,22 @@ async def health(request: Request) -> dict[str, str]:
     return out
 
 
-@app.get("/loads", response_model=list[LoadRead], dependencies=[Depends(require_api_key)])
+@app.get("/metrics")
+def metrics_json(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Aggregated call metrics for dashboards and external monitoring."""
+    return build_metrics_bundle(db)
+
+
+@app.get("/dashboard")
+def dashboard_redirect() -> RedirectResponse:
+    """Send browsers to the Streamlit app (path depends on reverse proxy / baseUrlPath)."""
+    url = settings.dashboard_entry_url.strip()
+    if not url:
+        url = "http://127.0.0.1:8501"
+    return RedirectResponse(url=url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@app.get("/loads", response_model=list[LoadRead])
 def list_loads(
     db: Session = Depends(get_db),
     origin: str | None = Query(default=None, description="Filter by origin city (case-insensitive substring)"),
@@ -95,7 +136,7 @@ def list_loads(
     return list(db.scalars(stmt).all())
 
 
-@app.post("/loads", response_model=LoadRead, status_code=201, dependencies=[Depends(require_api_key)])
+@app.post("/loads", response_model=LoadRead, status_code=201)
 def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
     row = Load(**payload.model_dump())
     db.add(row)
@@ -111,7 +152,7 @@ def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
     return row
 
 
-@app.post("/process-call", dependencies=[Depends(require_api_key)])
+@app.post("/process-call")
 async def process_call_webhook(
     payload: ProcessCallRequest,
     request: Request,
@@ -136,7 +177,7 @@ async def process_call_webhook(
     return body
 
 
-@app.get("/calls", response_model=list[CallRead], dependencies=[Depends(require_api_key)])
+@app.get("/calls", response_model=list[CallRead])
 def list_calls(
     db: Session = Depends(get_db),
     outcome: str | None = Query(default=None, description="Filter by outcome (exact match)"),
@@ -151,7 +192,6 @@ def list_calls(
     "/verify-carrier/mc/{mc_number}",
     response_model=CarrierVerifyResponse,
     response_model_exclude_none=True,
-    dependencies=[Depends(require_api_key)],
 )
 async def verify_carrier_mc(mc_number: str, request: Request) -> CarrierVerifyResponse:
     redis_client = getattr(request.app.state, "redis", None)
