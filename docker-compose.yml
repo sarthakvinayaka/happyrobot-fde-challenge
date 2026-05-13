@@ -11,7 +11,10 @@ services:
       - "6379"
 
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
     restart: unless-stopped
     expose:
       - "8000"
@@ -29,7 +32,8 @@ services:
   streamlit:
     build:
       context: .
-      dockerfile: Dockerfile.streamlit
+      dockerfile: Dockerfile
+      target: streamlit
     restart: unless-stopped
     expose:
       - "8501"
@@ -37,6 +41,7 @@ services:
       - api
     environment:
       API_BASE_URL: http://api:8000
+      API_METRICS_PATH: /v1/metrics
       API_KEY: ${API_KEY:-sk-testkey}
 
   nginx:

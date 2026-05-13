@@ -1,0 +1,31 @@
+# Fly.io: deploy API only (Dockerfile target `api`). See DEPLOYMENT.md.
+#
+# Set secrets (values only in fly dashboard / CLI, not in this file):
+#   API_KEY              — required; clients send X-API-Key
+#   DATABASE_URL         — Postgres recommended in prod (postgresql+psycopg://...)
+#   FMCSA_KEY or FMCSA_WEB_KEY — FMCSA QCMobile web key
+#   REDIS_URL            — optional cache
+#
+# fly apps create YOUR_APP_NAME
+# fly secrets set ...
+# fly deploy --config fly.toml --build-target api
+
+app = "happyrobot-fde-challenge"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+  build-target = "api"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -1,4 +1,4 @@
-"""Aggregate metrics from `calls` for dashboards and GET /metrics."""
+"""Aggregate metrics from `calls` for dashboards and GET /v1/metrics."""
 
 from __future__ import annotations
 

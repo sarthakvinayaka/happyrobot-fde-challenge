@@ -1,0 +1,16 @@
+FROM nginx:alpine
+
+RUN apk add --no-cache openssl python3
+
+COPY nginx.prod.conf.template /etc/nginx/nginx.prod.conf.template
+COPY render_nginx_conf.py /usr/local/bin/render_nginx_conf.py
+RUN chmod +x /usr/local/bin/render_nginx_conf.py
+
+COPY docker-entrypoint.d/99-gen-certs.sh /docker-entrypoint.d/99-gen-certs.sh
+COPY prod-docker-entrypoint.d/98-render-prod-nginx.sh /docker-entrypoint.d/98-render-prod-nginx.sh
+RUN chmod +x /docker-entrypoint.d/*.sh
+
+ENV NGINX_TEMPLATE=/etc/nginx/nginx.prod.conf.template
+ENV NGINX_CONF_OUT=/etc/nginx/nginx.conf
+
+EXPOSE 80 443
