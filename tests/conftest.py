@@ -55,6 +55,7 @@ def db_session() -> Session:
 @pytest.fixture
 def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr("app.config.settings.api_key", "test", raising=False)
+    monkeypatch.setattr("app.config.settings.skip_api_key_auth", False, raising=False)
 
     def _override_get_db():
         yield db_session

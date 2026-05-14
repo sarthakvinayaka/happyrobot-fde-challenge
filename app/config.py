@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/loads.db"
     api_key: str = "sk-testkey"  # override with API_KEY in production
+    # If true, X-API-Key is not required (local/ngrok demos only). Never enable on public internet.
+    skip_api_key_auth: bool = Field(default=False)
     redis_url: str = "redis://localhost:6379/0"
     fmcsa_web_key: str = ""  # FMCSA_WEB_KEY in .env (QCMobile Web Key)
     fmcsa_key: str = ""  # FMCSA_KEY in .env — same secret; used in prod compose examples

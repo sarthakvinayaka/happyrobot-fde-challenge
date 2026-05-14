@@ -317,6 +317,13 @@ def main() -> None:
     try:
         bundle = load_metrics(API_BASE, api_key)
     except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            st.error(
+                "API returned 401 (invalid API key). The sidebar **X-API-Key** and env **API_KEY** "
+                f"must exactly match the **`API_KEY`** on your Railway API service. "
+                f"Calling: `{API_BASE}{API_METRICS_PATH}`"
+            )
+            return
         st.error(f"API error {e.response.status_code}: {e.response.text}")
         return
     except httpx.RequestError as e:

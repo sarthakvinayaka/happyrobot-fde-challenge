@@ -55,13 +55,12 @@ async def lifespan(app: FastAPI):
 
 
 class RequireApiKeyMiddleware(BaseHTTPMiddleware):
-    """Require X-API-Key on API routes; allow unauthenticated GET to docs and index.
+    """Require ``X-API-Key`` unless ``SKIP_API_KEY_AUTH`` is set (dev only) or route is public.
 
-    Browsers cannot attach ``X-API-Key`` when users paste the public Railway URL.
-    ``GET /``, ``/docs``, ``/openapi.json``, ``/redoc``, and ``/dashboard`` are exempt so
-    the landing page and Swagger load without a key. **All ``/v1/*`` routes still require
-    ``X-API-Key``** (use curl, HappyRobot, or Swagger "Authorize" once we add a scheme—or
-    send the header from the browser via an extension for API calls).
+    Set env ``SKIP_API_KEY_AUTH=true`` to turn off key checks entirely (e.g. quick ngrok demos).
+    **Do not use on a public production URL.** When auth is on, ``GET /``, ``/docs``,
+    ``/openapi.json``, ``/redoc``, ``/dashboard``, and ``/v1/dashboard`` are exempt;
+    other **``/v1/*``** routes need a key.
     """
 
     _PUBLIC_GET_PATHS = frozenset(
@@ -71,6 +70,7 @@ class RequireApiKeyMiddleware(BaseHTTPMiddleware):
             "/openapi.json",
             "/redoc",
             "/dashboard",
+            "/v1/dashboard",
         }
     )
 
@@ -83,6 +83,8 @@ class RequireApiKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         if request.method == "OPTIONS":
+            return await call_next(request)
+        if settings.skip_api_key_auth:
             return await call_next(request)
         if self._exempt_from_api_key(request):
             return await call_next(request)
@@ -312,6 +314,19 @@ async def verify_carrier_mc(mc_number: str, request: Request) -> CarrierVerifyRe
         ) from e
 
 
+def _streamlit_dashboard_redirect() -> RedirectResponse:
+    url = settings.dashboard_entry_url.strip()
+    if not url:
+        url = "http://127.0.0.1:8501"
+    return RedirectResponse(url=url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@v1.get("/dashboard")
+def v1_dashboard_redirect() -> RedirectResponse:
+    """Same as ``GET /dashboard`` for clients that wrongly prefix ``/v1``."""
+    return _streamlit_dashboard_redirect()
+
+
 app = FastAPI(title="Freight Loads API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(RequireApiKeyMiddleware)
@@ -339,13 +354,11 @@ def root() -> dict[str, str]:
         "metrics": "/v1/metrics",
         "search_loads": "/v1/search-loads",
         "dashboard_redirect": "/dashboard",
+        "dashboard_redirect_v1": "/v1/dashboard",
     }
 
 
 @app.get("/dashboard")
 def dashboard_redirect() -> RedirectResponse:
     """Send browsers to the Streamlit app (path depends on reverse proxy / baseUrlPath)."""
-    url = settings.dashboard_entry_url.strip()
-    if not url:
-        url = "http://127.0.0.1:8501"
-    return RedirectResponse(url=url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return _streamlit_dashboard_redirect()
