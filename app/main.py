@@ -55,10 +55,36 @@ async def lifespan(app: FastAPI):
 
 
 class RequireApiKeyMiddleware(BaseHTTPMiddleware):
-    """Require X-API-Key on every request (except CORS preflight)."""
+    """Require X-API-Key on API routes; allow unauthenticated GET to docs and index.
+
+    Browsers cannot attach ``X-API-Key`` when users paste the public Railway URL.
+    ``GET /``, ``/docs``, ``/openapi.json``, ``/redoc``, and ``/dashboard`` are exempt so
+    the landing page and Swagger load without a key. **All ``/v1/*`` routes still require
+    ``X-API-Key``** (use curl, HappyRobot, or Swagger "Authorize" once we add a scheme—or
+    send the header from the browser via an extension for API calls).
+    """
+
+    _PUBLIC_GET_PATHS = frozenset(
+        {
+            "/",
+            "/docs",
+            "/openapi.json",
+            "/redoc",
+            "/dashboard",
+        }
+    )
+
+    def _exempt_from_api_key(self, request: Request) -> bool:
+        if request.method != "GET":
+            return False
+        path = request.url.path
+        norm = path.rstrip("/") or "/"
+        return norm in self._PUBLIC_GET_PATHS
 
     async def dispatch(self, request: Request, call_next):
         if request.method == "OPTIONS":
+            return await call_next(request)
+        if self._exempt_from_api_key(request):
             return await call_next(request)
         expected = settings.api_key.strip()
         if not expected:

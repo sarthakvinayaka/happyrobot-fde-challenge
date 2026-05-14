@@ -93,10 +93,13 @@ Root **`GET /`** returns a small JSON index. **`GET /dashboard`** returns a **30
 ## Reproduce (quick checks)
 
 ```bash
-# 401 without key
+# 401 without key on /v1/* (API routes)
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/v1/health
 
-# 200 with key
+# 200 for /docs and / without key (browser-friendly); /v1/* still needs X-API-Key
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/docs
+
+# 200 with key on /v1/health
 curl -s -H "X-API-Key: sk-testkey" http://127.0.0.1:8000/v1/health
 
 # Metrics JSON

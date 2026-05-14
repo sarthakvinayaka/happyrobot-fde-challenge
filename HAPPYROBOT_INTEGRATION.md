@@ -5,6 +5,8 @@ This document is for **workflow builders** wiring an inbound **web call** agent 
 **Base URL:** `https://<your-deployed-host>` (use TLS in production).  
 **Auth:** every request sends header `X-API-Key: <same value as server API_KEY>`.
 
+**HappyRobot workflow variable:** If you create a secret named e.g. **`railwayapikey`** with value **`sk-testkey`** (or any string), map it in **each webhook** to the HTTP header **`X-API-Key`** so it matches the **`API_KEY`** variable on your Railway API service (same string in both places).
+
 ---
 
 ## Expected workflow structure (high level)
